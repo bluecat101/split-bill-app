@@ -20,7 +20,9 @@ function alphaToNum(alphabet){
 
 function resetSheet(){
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_READ);
-  sheet.getRange("A2:Z100").clear();
+  // 初期化
+  sheet.getRange("A2:Z100").clearDataValidations();
+  sheet.getRange("A2:Z100").clearContent();
   // 名前部分のリセット
   sheet.getRange("F1:Z1").clear()
   sheet.getRange(1,6,1,NAME_LIST.length).setValues([NAME_LIST]);
@@ -67,6 +69,23 @@ function resetTotalToWrite(){
   sheet.getRange(`F2:G${NAME_LIST.length + 1}`).setBorder(true, true, true, true, true, true);
 }
 
+function onEdit(e){
+  const TARGET_COL_IDX = [alphaToNum("A"),alphaToNum("B")]
+  const sheet = e.source.getActiveSheet();
+  const range = e.range;
+  const target = sheet.getRange(`B${range.getRow()}`).getValue(); // 対象者を取得
+  const sheetName = sheet.getName();
+
+  // 対象のシートの編集かどうか
+  if(sheetName !== SHEET_NAME_TO_READ) return;
+  // 複数範囲の時は除外
+  if(range.getNumRows() !== 1 && range.getNumColumns() !== 1) return; 
+  // 内容を変更する関数の実行
+  if(TARGET_COL_IDX.includes(range.getColumn())) changeCheckBox(sheet, range, target);
+  calculationMoney();
+}
+
+
 function changeCheckBox(sheet, range, target){
   if(target == "") return;
   let row = range.getRow();
@@ -103,23 +122,6 @@ function changeCheckBox(sheet, range, target){
     if(index == -1) return;
     sheet.getRange(row,6+index).setValue("True");
   }
-}
-
-function onEdit(e){
-  const TARGET_COL_IDX = [1,2]
-  const sheet = e.source.getActiveSheet();
-  const range = e.range;
-  const target = sheet.getRange(`B${range.getRow()}`).getValue(); // 対象者を取得
-  const sheetName = sheet.getName();
-
-  // 対象のシートの編集かどうか
-  if(sheetName !== SHEET_NAME_TO_READ) return;
-  // 複数範囲の時は除外
-  if(range.getNumRows() !== 1 && range.getNumColumns() !== 1) return;
-  // 特定列を含むか
-  if(!(TARGET_COL_IDX.includes(range.getColumn()))) return;
-  if([1,2].includes(range.getColumn())) changeCheckBox(sheet, range, target);
-  calculationMoney();
 }
 
 
