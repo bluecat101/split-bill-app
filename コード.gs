@@ -31,7 +31,10 @@ function resetSheet(){
     const cell = sheet.getRange(`D${row}`);
     cell.setFormula(`=IF(B${row}="全員",C${row}/${NAME_LIST.length},(C${row}/COUNTA(SPLIT(B${row},","))))`);
   }
+  // プルダウンの再生成
   resetPullDown();
+  // SHEET_NAME_TO_WRITEの再生成
+  resetTotalToWrite();
 }
 function resetPullDown(){
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_READ);
@@ -59,8 +62,8 @@ function resetTotalToWrite(){
       arrayToWriteForEachName.push(["",name2,0]); // 誰から受け取るのかの名前を示す行
     })
     // 必要な情報を追加する(常に同じ位置であるため後から追加する)
-    arrayToWriteForEachName[idx*3+1][0] = "受け取り金額(残り)";
-    arrayToWriteForEachName[idx*3+2][0] = 0;
+    arrayToWriteForEachName[idx*NAME_LIST.length+1][0] = "受け取り金額(残り)";
+    arrayToWriteForEachName[idx*NAME_LIST.length+2][0] = 0;
     sheet.getRange(`A2:C${arrayToWriteForEachName.length + 1}`).setValues(arrayToWriteForEachName)// 2(初期値)+配列の長さ-1(2行目から始まっているため)
   })
   // 全合計を枠組みを作成する
@@ -140,8 +143,8 @@ function calculationMoney(){
   const sheetToRead = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_READ);
   const sheetToWrite = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_WRITE);
   const range = sheetToRead.getRange(1, 1).getNextDataCell(SpreadsheetApp.Direction.DOWN);
-  const lastRow = range.getRow();
-  const values = sheetToRead.getRange(2,1,lastRow-1,range.getLow()).getValues();
+  const lastRow = range.getLastRow();
+  const values = sheetToRead.getRange(2,1,lastRow-1,alphaToNum("E")+NAME_LIST.length).getValues();
   for(let row_idx = 0; row_idx < values.length; row_idx++){
     const payer = values[row_idx][0];
     let targets = values[row_idx][1].split(",");
@@ -184,6 +187,6 @@ function calculationMoney(){
       i++;
     });
   });
-  sheetToWrite.getRange("C2:C10").setValues(paymentTotalByEach);
-  sheetToWrite.getRange("G2:G4").setValues(paymentTotalByName);
+  sheetToWrite.getRange(`C2:C${(NAME_LIST.length**2)+1}`).setValues(paymentTotalByEach);
+  sheetToWrite.getRange(`G2:G${NAME_LIST.length+1}`).setValues(paymentTotalByName);
 }
