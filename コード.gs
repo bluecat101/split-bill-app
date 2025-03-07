@@ -1,16 +1,12 @@
 const SHEET_NAME_USER_LIST = "名前";
-const SHEET_NAME_TO_READ = "支払い(記載)";
-const SHEET_NAME_TO_WRITE = "支払い金額(OnlyRead)";
+const SHEET_NAME_TO_RECORD = "支払い(記載)";
+const SHEET_NAME_TO_READ = "支払い金額(OnlyRead)";
 const userNameSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_USER_LIST);
-const NAME_LIST = userNameSheet
-  .getRange(`A2:A${userNameSheet.getLastRow()}`)
-  .getValues()
-  .flat();
+const NAME_LIST = userNameSheet.getRange(`A2:A${userNameSheet.getLastRow()}`).getValues().flat();
 
 function alphaToNum(alphabet) {
   if (typeof alphabet !== "string" && alphabet !== alphabet.toUpperCase())
     return null; // 文字列でない or 大文字でない => null
-
   let initalValue = 0, idx = 0;
   // 26進数(AA = 27)のように扱い、末尾の文字をidx=0にするためreverse()を使用する
   return alphabet.split("").reverse().reduce((accumulator, currentValue) => {
@@ -22,8 +18,9 @@ function alphaToNum(alphabet) {
 }
 
 function resetSheet() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_READ);
-  // 初期化
+  const sheetToRecord = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_RECORD);
+  const sheetToRead = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_READ);
+  // 記録用のシートを初期化
   sheet.getRange("A2:Z100").clearDataValidations();
   sheet.getRange("A2:Z100").clearContent();
   // 名前部分のリセット
@@ -38,11 +35,22 @@ function resetSheet() {
   }
   // プルダウンの再生成
   resetPullDown();
-  // SHEET_NAME_TO_WRITEの再生成
-  resetTotalToWrite();
+  
+
+  // 確認用のシートを初期化
+  sheet.getRange(`A2:F${sheet.getLastRow()}`).clear();
+  // 各名前ごとの合計を枠組みを作成する
+  const header = [[ "", "支払い金額", "かかった金額", "支払い済み", "受け取り済み", "受け取り or 支払い"]];
+  sheet.getRange(`A1:F1`).setValues(header);
+  sheet.getRange(`A2:A${NAME_LIST.length + 1}`).setValues(NAME_LIST.map((name) => [name]));
+  sheet.getRange(`A${NAME_LIST.length + 1 + 2}`).setValue("詳細");
+  // 枠線の追加
+  sheet.getRange(`A1:F${NAME_LIST.length + 1}`).setBorder(true, true, true, true, true, true);
+
+
 }
 function resetPullDown() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_READ);
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_RECORD);
   // 支払い者のプルダウンの作成
   let rule = SpreadsheetApp.newDataValidation().requireValueInList(NAME_LIST).build();
   let cell = sheet.getRange("A2:A100");
@@ -54,25 +62,6 @@ function resetPullDown() {
   cell.setDataValidation(rule);
 }
 
-function resetTotalToWrite() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_WRITE);
-  // 初期化
-  sheet.getRange(`A2:F${sheet.getLastRow()}`).clear();
-  // 各名前ごとの合計を枠組みを作成する
-  const header = [[
-    "",
-    "支払い金額",
-    "かかった金額",
-    "支払い済み",
-    "受け取り済み",
-    "受け取り or 支払い"]];
-  sheet.getRange(`A1:F1`).setValues(header);
-  sheet.getRange(`A2:A${NAME_LIST.length + 1}`).setValues(NAME_LIST.map((name) => [name]));
-  sheet.getRange(`A${NAME_LIST.length + 1 + 2}`).setValue("詳細");
-  // 枠線の追加
-  sheet.getRange(`A1:F${NAME_LIST.length + 1}`).setBorder(true, true, true, true, true, true);
-}
-
 function onEdit(e) {
   const TARGET_COL_IDX = [alphaToNum("A"), alphaToNum("B")];
   const sheet = e.source.getActiveSheet();
@@ -81,7 +70,7 @@ function onEdit(e) {
   const sheetName = sheet.getName();
 
   // 対象のシートの編集かどうか
-  if (sheetName !== SHEET_NAME_TO_READ) return;
+  if (sheetName !== SHEET_NAME_TO_RECORD) return;
   // 複数範囲の時は除外
   if (range.getNumRows() !== 1 && range.getNumColumns() !== 1) return;
   // 内容を変更する関数の実行
@@ -150,11 +139,11 @@ function calculationMoney() {
     };
   });
 
-  const sheetToRead  = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_READ);
-  const sheetToWrite = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_WRITE);
-  const range = sheetToRead.getRange(1, 1).getNextDataCell(SpreadsheetApp.Direction.DOWN);
+  const sheetToRecord  = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_RECORD);
+  const sheetToRead = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_READ);
+  const range = sheetToRecord.getRange(1, 1).getNextDataCell(SpreadsheetApp.Direction.DOWN);
   const lastRow = range.getLastRow();
-  const values = sheetToRead.getRange(2, 1, lastRow - 1, alphaToNum("E") + NAME_LIST.length).getValues();
+  const values = sheetToRecord.getRange(2, 1, lastRow - 1, alphaToNum("E") + NAME_LIST.length).getValues();
   // 計算する
   for (let row_idx = 0; row_idx < values.length; row_idx++) {
     const payer = values[row_idx][0];
@@ -216,6 +205,6 @@ function calculationMoney() {
       repayAmount -= minAmountReveiveOrRepay;
     }
   }
-  sheetToWrite.getRange(`A2:F${NAME_LIST.length + 1}`).setValues(paymentForViewTable);
-  sheetToWrite.getRange(`A${NAME_LIST.length + 1 + 3}:A${NAME_LIST.length + 1 + 3 + transactions.length - 1}`).setValues(transactions);
+  sheetToRead.getRange(`A2:F${NAME_LIST.length + 1}`).setValues(paymentForViewTable);
+  sheetToRead.getRange(`A${NAME_LIST.length + 1 + 3}:A${NAME_LIST.length + 1 + 3 + transactions.length - 1}`).setValues(transactions);
 }
