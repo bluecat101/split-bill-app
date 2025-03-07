@@ -16,8 +16,6 @@ function alphaToNum(alphabet){
   );
 }
 
-
-
 function resetSheet(){
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_READ);
   // 初期化
@@ -52,24 +50,14 @@ function resetPullDown(){
 function resetTotalToWrite(){
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_WRITE);
   // 初期化
-  sheet.getRange(`A2:G${sheet.getLastRow()}`).clear()
+  sheet.getRange(`A2:F${sheet.getLastRow()}`).clear();
   // 各名前ごとの合計を枠組みを作成する
-  let arrayToWriteForEachName = [];
-  NAME_LIST.forEach((name, idx) => {
-    arrayToWriteForEachName.push([name,"",""]); // 誰用なのかを示す行
-    NAME_LIST.forEach(name2 => {
-      if(name2 === name) return;
-      arrayToWriteForEachName.push(["",name2,0]); // 誰から受け取るのかの名前を示す行
-    })
-    // 必要な情報を追加する(常に同じ位置であるため後から追加する)
-    arrayToWriteForEachName[idx*NAME_LIST.length+1][0] = "受け取り金額(残り)";
-    arrayToWriteForEachName[idx*NAME_LIST.length+2][0] = 0;
-    sheet.getRange(`A2:C${arrayToWriteForEachName.length + 1}`).setValues(arrayToWriteForEachName)// 2(初期値)+配列の長さ-1(2行目から始まっているため)
-  })
-  // 全合計を枠組みを作成する
-  sheet.getRange(`F2:G${NAME_LIST.length + 1}`).setValues(NAME_LIST.map(name=>[name,0])) // 2(初期値)+NAME_LIST.length-1(2行目から始まっているため)
+  const header = [["","支払い金額", "かかった金額", "支払い済み", "受け取り済み", "受け取り or 支払い"]];
+  sheet.getRange(`A1:F1`).setValues(header);
+  sheet.getRange(`A2:A${NAME_LIST.length+1}`).setValues(NAME_LIST.map(name => [name]));
+  sheet.getRange(`A${NAME_LIST.length+1+2}`).setValue("詳細");
   // 枠線の追加
-  sheet.getRange(`F2:G${NAME_LIST.length + 1}`).setBorder(true, true, true, true, true, true);
+  sheet.getRange(`A1:F${NAME_LIST.length+1}`).setBorder(true, true, true, true, true, true);
 }
 
 function onEdit(e){
@@ -129,22 +117,19 @@ function changeCheckBox(sheet, range, target){
 
 
 function calculationMoney(){
-  // {立替者:{支払い者:[0,0],...}}このような辞書を作る([0,0] = [支払い済み, 支払い合計], 立替者 = 支払い者の場合も作る)
+  // {立替者:{支払った金額(paidAmount):, かかった金額(totalCost):, 返済済み金額(repaidAmount):, 受け取り済み金額(receivedAmount):, 差額(受け取る(+) or 支払う(-), difference):}
+  // 冗長であるがキーを増やし、わかりやすさ重視
   let payDictByName = {}
-  for(let i = 0; i<NAME_LIST.length; i++){
-    let name = NAME_LIST[i];
-    payDictByName[name] = {};
-    for(let j = 0; j<NAME_LIST.length; j++){
-      name_2 = NAME_LIST[j];
-      payDictByName[name][name_2] = [0,0]
-    }
-  }
+  NAME_LIST.forEach(name=>{
+    payDictByName[name] = {"paidAmount":0, "totalCost":0, "repaidAmount":0, "receivedAmount":0, "difference":0};
+  })
   
   const sheetToRead = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_READ);
   const sheetToWrite = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_WRITE);
   const range = sheetToRead.getRange(1, 1).getNextDataCell(SpreadsheetApp.Direction.DOWN);
   const lastRow = range.getLastRow();
   const values = sheetToRead.getRange(2,1,lastRow-1,alphaToNum("E")+NAME_LIST.length).getValues();
+  // 計算する
   for(let row_idx = 0; row_idx < values.length; row_idx++){
     const payer = values[row_idx][0];
     let targets = values[row_idx][1].split(",");
@@ -153,40 +138,59 @@ function calculationMoney(){
     if(targets == "全員"){
      targets = NAME_LIST; 
     }else if (targets == "") continue;
-    // 自分に足す
-    payDictByName[payer][payer][0] += amountPerPerson
-    payDictByName[payer][payer][0] += amountPerPerson
+    // 支払った金額に加算する
+    payDictByName[payer]["paidAmount"] += amount
     // 合計を求める
     for(let i=0; i < targets.length; i++){
-      let name = targets[i].trim();
-      let name_index = NAME_LIST.indexOf(name);
+      let targetName = targets[i].trim();
+      // かかった金額に加算する
+      payDictByName[targetName]["totalCost"] += amountPerPerson
+      // targetに支払い済みマークがついているかを取得する
+      let name_index = NAME_LIST.indexOf(targetName);
       let checkbox_value = values[row_idx][5 + name_index] // 5はcheckboxの始まるIndex
-      payDictByName[payer][name][1] += amountPerPerson
+      // チェックがついていれば返済済み金額、受け取り済み金額に加算する
       if(checkbox_value){
-        payDictByName[payer][name][0] += amountPerPerson
+        payDictByName[targetName]["repaidAmount"] += amountPerPerson
+        payDictByName[payer]["receivedAmount"] += amountPerPerson
       }
     }
   }
+  // 差額(受け取る or 支払う)を出す
+  NAME_LIST.forEach(name=>{
+    // 差額 = 支払い - 負担 + 返済済み - 受け取り済み
+    payDictByName[name]["difference"] = payDictByName[name]["paidAmount"] - payDictByName[name]["totalCost"] + payDictByName[name]["repaidAmount"] - payDictByName[name]["receivedAmount"]
+  })
   // 記述する
-  let paymentTotalByEach=[]
-  let paymentTotalByName=NAME_LIST.map(()=>[0])
-  Object.keys(payDictByName).forEach(payer => {
-    paymentTotalByEach.push([""]); // 空白を作る
-    let i=0;
-    Object.keys(payDictByName[payer]).forEach(target => {
-      if(payer !== target){
-        let payment = payDictByName[payer][target][1] - payDictByName[payer][target][0];
-        let payment_reverse = payDictByName[target][payer][1] - payDictByName[target][payer][0];
-        if(payment >= payment_reverse){ // 支払い金額が多い人の方に合算する
-          paymentTotalByEach.push([payment- payment_reverse]);
-        }else{
-          paymentTotalByEach.push([0]); // 支払いはない
-        }
-      }
-      paymentTotalByName[i][0] += payDictByName[payer][target][1];
-      i++;
-    });
+  // paymentForViewTable = [[名前,支払った金額, かかった金額, 返済済み金額, 受け取り済み金額, 差額]]
+  let paymentForViewTable=Object.entries(payDictByName).map(([key, value]) => [key, ...Object.values(value)]);
+  // [0]: 名前,[1]: 差額
+  let receiveAmountByName = []
+  let repayAmountByName = []
+  Object.entries(payDictByName).forEach(([name, value]) =>  {
+    let diffAmount = value["difference"]
+    if(diffAmount > 0) receiveAmountByName.push([name, diffAmount]);
+    else if(diffAmount < 0) repayAmountByName.push([name, diffAmount]);
   });
-  sheetToWrite.getRange(`C2:C${(NAME_LIST.length**2)+1}`).setValues(paymentTotalByEach);
-  sheetToWrite.getRange(`G2:G${NAME_LIST.length+1}`).setValues(paymentTotalByName);
+  receiveAmountByName.sort(function(a,b){return(b[1] -  a[1]);}); // 降順ソート(絶対値が大きい順にする)
+  repayAmountByName.sort(function(a,b){return(a[1] -  b[1]);}); // 昇順ソート(絶対値が大きい順にする)
+  let transactions = [];
+  for(let i=0; i<receiveAmountByName.length; i++){
+    const receiveName = receiveAmountByName[i][0]
+    let receiveAmount = receiveAmountByName[i][1]
+    for(let j=0; j<repayAmountByName.length; j++){
+      const repayName = repayAmountByName[j][0]
+      let repayAmount = repayAmountByName[j][1]
+      if(receiveAmount === 0 || repayAmount === 0 ) continue;
+      // 誰かに支払う分だけ残りの受け取り金額、支払い金額を減らす
+      let minAmountReveiveOrRepay = Math.min(receiveAmount, Math.abs(repayAmount)) // 正の数で返す
+      transactions.push([`${repayName} -> ${receiveName}から${Math.round(minAmountReveiveOrRepay)}円支払う`]); // スプレッドシートに書き込むので2次元配列
+      // 元のデータも変数のデータも両方変える
+      receiveAmountByName[i][1] -= minAmountReveiveOrRepay; 
+      receiveAmount -= minAmountReveiveOrRepay;
+      repayAmountByName[j][1] += minAmountReveiveOrRepay;
+      repayAmount -= minAmountReveiveOrRepay;
+    }
+  }
+  sheetToWrite.getRange(`A2:F${NAME_LIST.length+1}`).setValues(paymentForViewTable);
+  sheetToWrite.getRange(`A${NAME_LIST.length+1+3}:A${NAME_LIST.length+1+3+transactions.length-1}`).setValues(transactions);
 }
