@@ -48,12 +48,10 @@ function alphaToNum(alphabet) {
  */
 function resetSheet() {
   if(isDuplicateName()) return;
-    /**
+  /**
    * @type {sheet} sheetToRecord 記録用のシート
-   * @type {sheet} sheetToRead   確認用のシート
    */
-  const sheetToRecord = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_RECORD);
-  const sheetToRead   = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_READ);
+  const sheetToRecord = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_RECORD);  
   // 記録用のシートを初期化
   sheetToRecord.getRange("A2:Z100").clearDataValidations();
   sheetToRecord.getRange("A2:Z100").clearContent();
@@ -70,18 +68,8 @@ function resetSheet() {
   // プルダウンの再生成
   resetPullDown();
   
-
-  // 確認用のシートを初期化
-  sheetToRead.getRange(`A2:F${sheetToRead.getLastRow()}`).clear();
-  // 各名前ごとの合計を枠組みを作成する
-  const header = [[ "", "支払い金額", "かかった金額", "支払い済み", "受け取り済み", "受け取り or 支払い"]];
-  sheetToRead.getRange(`A1:F1`).setValues(header);
-  sheetToRead.getRange(`A2:A${NAME_LIST.length + 1}`).setValues(NAME_LIST.map((name) => [name]));
-  sheetToRead.getRange(`A${NAME_LIST.length + 1 + 2}`).setValue("詳細");
-  // 枠線の追加
-  sheetToRead.getRange(`A1:F${NAME_LIST.length + 1}`).setBorder(true, true, true, true, true, true);
-
-
+  // 確認用のシートを初期化する
+  resetSheetForRead();
 }
 
 /**
@@ -104,6 +92,24 @@ function resetPullDown() {
   rule = SpreadsheetApp.newDataValidation().requireValueInList(["全員",...NAME_LIST]).build();
   range = sheet.getRange("B2:B100");
   range.setDataValidation(rule);
+}
+
+/**
+ * 確認用のシートを初期化 
+ */
+function resetSheetForRead() {
+  /**
+   * @type {sheet} sheetToRead 確認用のシート
+   */
+  const sheetToRead   = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_READ);
+  sheetToRead.getRange(`A2:F${sheetToRead.getLastRow()}`).clear();
+  // 各名前ごとの合計を枠組みを作成する
+  const header = [[ "", "支払い金額", "かかった金額", "支払い済み", "受け取り済み", "受け取り or 支払い"]];
+  sheetToRead.getRange(`A1:F1`).setValues(header);
+  sheetToRead.getRange(`A2:A${NAME_LIST.length + 1}`).setValues(NAME_LIST.map((name) => [name]));
+  sheetToRead.getRange(`A${NAME_LIST.length + 1 + 2}`).setValue("詳細");
+  // 枠線の追加
+  sheetToRead.getRange(`A1:F${NAME_LIST.length + 1}`).setBorder(true, true, true, true, true, true);
 }
 
 /**
@@ -211,7 +217,7 @@ function calculationMoney() {
    */
   const sheetToRecord = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_RECORD);
   const sheetToRead   = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_READ);
-  const values        = sheetToRecord.getRange(2, 1, sheetToRead.getLastRow() - 1, alphaToNum("D") + NAME_LIST.length).getValues();
+  const values        = sheetToRecord.getRange(2, 1, sheetToRead.getLastRow() - 1, alphaToNum("E") + NAME_LIST.length).getValues();
   // 計算する
   for (let row_idx = 0; row_idx < values.length; row_idx++) {
     /**
@@ -221,7 +227,7 @@ function calculationMoney() {
      * @type {number} amountPerPerson 一人当たりの金額
      */
     const payer = values[row_idx][0];
-    const targets = values[row_idx][1].split(",");
+    let targets = values[row_idx][1].split(",");
     const amount = values[row_idx][2];
     const amountPerPerson = values[row_idx][3];
     if (targets == "全員") targets = NAME_LIST;
@@ -237,7 +243,7 @@ function calculationMoney() {
        */
       const targetName = targets[i].trim();
       const name_index = NAME_LIST.indexOf(targetName);
-      const checkbox_value = values[row_idx][alphaToNum("F") + name_index]; // targetに支払い済みマークがついているかを取得する
+      const checkbox_value = values[row_idx][alphaToNum("F") + name_index - 1]; // targetに支払い済みマークがついているかを取得する(-1はindexとlengthの差)
       // かかった金額に加算する
       payDictByName[targetName]["totalCost"] += amountPerPerson;
       // チェックがついていれば返済済み金額、受け取り済み金額に加算する
@@ -292,11 +298,12 @@ function calculationMoney() {
        * @type {number} minAmountReveiveOrRepay 受け取る額と返済額の小さい方(正の数)
        */
       const minAmountReveiveOrRepay = Math.min(receiveAmount, Math.abs(repayAmount));
-      transactions.push([`${repayName} -> ${receiveName}から${Math.round(minAmountReveiveOrRepay)}円支払う`,]);
+      transactions.push([`${repayName} -> ${receiveName} ${Math.round(minAmountReveiveOrRepay)}円支払う`,]);
       receiveAmountByName[i][1] -= minAmountReveiveOrRepay;
       repayAmountByName[j][1] += minAmountReveiveOrRepay;
     }
   }
+  resetSheetForRead();
   sheetToRead.getRange(`A2:F${NAME_LIST.length + 1}`).setValues(paymentForViewTable);
   if(transactions.length !== 0) sheetToRead.getRange(`A${NAME_LIST.length + 1 + 3}:A${NAME_LIST.length + 1 + 3 + transactions.length - 1}`).setValues(transactions);
 }
