@@ -21,14 +21,14 @@ function resetSheet() {
   const sheetToRecord = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_RECORD);
   const sheetToRead = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_READ);
   // 記録用のシートを初期化
-  sheet.getRange("A2:Z100").clearDataValidations();
-  sheet.getRange("A2:Z100").clearContent();
+  sheetToRecord.getRange("A2:Z100").clearDataValidations();
+  sheetToRecord.getRange("A2:Z100").clearContent();
   // 名前部分のリセット
-  sheet.getRange("F1:Z1").clear();
-  sheet.getRange(1, 6, 1, NAME_LIST.length).setValues([NAME_LIST]);
+  sheetToRecord.getRange("F1:Z1").clear();
+  sheetToRecord.getRange(1, 6, 1, NAME_LIST.length).setValues([NAME_LIST]);
   // 数式の更新
   for (let row = 2; row <= 100; row++) {
-    const cell = sheet.getRange(`D${row}`);
+    const cell = sheetToRecord.getRange(`D${row}`);
     cell.setFormula(
       `=IF(B${row}="全員",C${row}/${NAME_LIST.length},(C${row}/COUNTA(SPLIT(B${row},","))))`
     );
@@ -38,14 +38,14 @@ function resetSheet() {
   
 
   // 確認用のシートを初期化
-  sheet.getRange(`A2:F${sheet.getLastRow()}`).clear();
+  sheetToRead.getRange(`A2:F${sheetToRead.getLastRow()}`).clear();
   // 各名前ごとの合計を枠組みを作成する
   const header = [[ "", "支払い金額", "かかった金額", "支払い済み", "受け取り済み", "受け取り or 支払い"]];
-  sheet.getRange(`A1:F1`).setValues(header);
-  sheet.getRange(`A2:A${NAME_LIST.length + 1}`).setValues(NAME_LIST.map((name) => [name]));
-  sheet.getRange(`A${NAME_LIST.length + 1 + 2}`).setValue("詳細");
+  sheetToRead.getRange(`A1:F1`).setValues(header);
+  sheetToRead.getRange(`A2:A${NAME_LIST.length + 1}`).setValues(NAME_LIST.map((name) => [name]));
+  sheetToRead.getRange(`A${NAME_LIST.length + 1 + 2}`).setValue("詳細");
   // 枠線の追加
-  sheet.getRange(`A1:F${NAME_LIST.length + 1}`).setBorder(true, true, true, true, true, true);
+  sheetToRead.getRange(`A1:F${NAME_LIST.length + 1}`).setBorder(true, true, true, true, true, true);
 
 
 }
