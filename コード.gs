@@ -16,8 +16,6 @@ function alphaToNum(alphabet){
   );
 }
 
-
-
 function resetSheet(){
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_READ);
   // 初期化
@@ -52,24 +50,14 @@ function resetPullDown(){
 function resetTotalToWrite(){
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME_TO_WRITE);
   // 初期化
-  sheet.getRange(`A2:G${sheet.getLastRow()}`).clear()
+  sheet.getRange(`A2:F${sheet.getLastRow()}`).clear();
   // 各名前ごとの合計を枠組みを作成する
-  let arrayToWriteForEachName = [];
-  NAME_LIST.forEach((name, idx) => {
-    arrayToWriteForEachName.push([name,"",""]); // 誰用なのかを示す行
-    NAME_LIST.forEach(name2 => {
-      if(name2 === name) return;
-      arrayToWriteForEachName.push(["",name2,0]); // 誰から受け取るのかの名前を示す行
-    })
-    // 必要な情報を追加する(常に同じ位置であるため後から追加する)
-    arrayToWriteForEachName[idx*NAME_LIST.length+1][0] = "受け取り金額(残り)";
-    arrayToWriteForEachName[idx*NAME_LIST.length+2][0] = 0;
-    sheet.getRange(`A2:C${arrayToWriteForEachName.length + 1}`).setValues(arrayToWriteForEachName)// 2(初期値)+配列の長さ-1(2行目から始まっているため)
-  })
-  // 全合計を枠組みを作成する
-  sheet.getRange(`F2:G${NAME_LIST.length + 1}`).setValues(NAME_LIST.map(name=>[name,0])) // 2(初期値)+NAME_LIST.length-1(2行目から始まっているため)
+  const header = [["","支払い金額", "かかった金額", "支払い済み", "受け取り済み", "受け取り or 支払い"]];
+  sheet.getRange(`A1:F1`).setValues(header);
+  sheet.getRange(`A2:A${NAME_LIST.length+1}`).setValues(NAME_LIST.map(name => [name]));
+  sheet.getRange(`A${NAME_LIST.length+1+2}`).setValue("詳細");
   // 枠線の追加
-  sheet.getRange(`F2:G${NAME_LIST.length + 1}`).setBorder(true, true, true, true, true, true);
+  sheet.getRange(`A1:F${NAME_LIST.length+1}`).setBorder(true, true, true, true, true, true);
 }
 
 function onEdit(e){
